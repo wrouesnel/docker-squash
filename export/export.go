@@ -131,9 +131,9 @@ func (l *LayerConfig) ContainerConfig() *ContainerConfig {
 // LoadExport loads a tarball export created by docker save.
 func LoadExport(image, location string) (*Export, error) {
 	if image == "" {
-		log.Debugf("Loading export from STDIN using %s for tempdir\n", location)
+		log.Debugf("Loading export from STDIN using %s for tempdir", location)
 	} else {
-		log.Debugf("Loading export from %s using %s for tempdir\n", image, location)
+		log.Debugf("Loading export from %s using %s for tempdir", image, location)
 	}
 
 	export := &Export{
@@ -188,9 +188,9 @@ func LoadExport(image, location string) (*Export, error) {
 		return nil, err
 	}
 
-	log.Debugf("Loaded image w/ %s layers\n", strconv.FormatInt(int64(len(export.Entries)), 10))
+	log.Debugf("Loaded image w/ %s layers", strconv.FormatInt(int64(len(export.Entries)), 10))
 	for repo, tags := range export.Repositories {
-		log.Debugf("  -  %s (%s tags)\n", repo, strconv.FormatInt(int64(len(*tags)), 10))
+		log.Debugf("  -  %s (%s tags)", repo, strconv.FormatInt(int64(len(*tags)), 10))
 	}
 	return export, err
 }
@@ -249,7 +249,7 @@ func (e *Export) ExtractLayers() error {
 	log.Debugln("Extracting layers...")
 
 	for _, entry := range e.Entries {
-		log.Debugf("  -  %s\n", entry.LayerTarPath)
+		log.Debugf("  -  %s", entry.LayerTarPath)
 		err := entry.ExtractLayerDir()
 		if err != nil {
 			return err
@@ -364,8 +364,14 @@ func (e *Export) InsertLayer(parent string) (*ExportedImage, error) {
 		return nil, err
 	}
 
-	layerConfig := newLayerConfig(id, parent, "squashed w/ docker-squash")
-	layerConfig.ContainerConfig().Cmd = []string{"/bin/sh", "-c", fmt.Sprintf("#(squash) from %s", parent[:12])}
+	var layerConfig *LayerConfig
+	if parent == "scratch" {
+		layerConfig = newLayerConfig(id, "", "squashed w/ docker-squash")
+		layerConfig.ContainerConfig().Cmd = []string{"/bin/sh", "-c", fmt.Sprintf("#(squash) from %s", parent)}
+	} else {
+		layerConfig = newLayerConfig(id, parent, "squashed w/ docker-squash")
+		layerConfig.ContainerConfig().Cmd = []string{"/bin/sh", "-c", fmt.Sprintf("#(squash) from %s", parent[:12])}
+	}
 	entry := &ExportedImage{
 		Path:         filepath.Join(e.Path, id),
 		JsonPath:     filepath.Join(e.Path, id, "json"),
@@ -391,8 +397,16 @@ func (e *Export) InsertLayer(parent string) (*ExportedImage, error) {
 		return nil, err
 	}
 
-	child := e.ChildOf(parent)
-	child.LayerConfig.Parent = id
+	// Allow use of the docker empty "scratch" to mean "replace root".
+	var child *ExportedImage
+	if parent == "scratch" {
+		curRoot := e.Root()
+		curRoot.LayerConfig.Parent = id
+		child = curRoot
+	} else {
+		child = e.ChildOf(parent)
+		child.LayerConfig.Parent = id
+	}
 
 	err = child.WriteJson()
 	if err != nil {
@@ -419,7 +433,7 @@ func (e *Export) ReplaceLayer(oldId string) (*ExportedImage, error) {
 		cmd = cmd[:47] + "..."
 	}
 
-	log.Debugf("  -  Replacing %s w/ new layer %s (%s)\n", oldId[:12], id[:12], cmd)
+	log.Debugf("  -  Replacing %s w/ new layer %s (%s)", oldId[:12], id[:12], cmd)
 	if child != nil {
 		child.LayerConfig.Parent = id
 		err = child.WriteJson()
@@ -471,7 +485,7 @@ func (e *Export) ReplaceLayer(oldId string) (*ExportedImage, error) {
 
 func (e *Export) SquashLayers(to, from *ExportedImage) error {
 
-	log.Debugf("Squashing from %s into %s\n", from.LayerConfig.Id[:12], to.LayerConfig.Id[:12])
+	log.Debugf("Squashing from %s into %s", from.LayerConfig.Id[:12], to.LayerConfig.Id[:12])
 	layerDir := filepath.Join(to.Path, "layer")
 	err := os.MkdirAll(layerDir, 0755)
 	if err != nil {
@@ -497,7 +511,7 @@ func (e *Export) SquashLayers(to, from *ExportedImage) error {
 			continue
 		}
 
-		out, err := extractTar(entry.LayerTarPath, layerDir)
+		out, err := ExtractTar(entry.LayerTarPath, layerDir)
 		if err != nil {
 			println(string(out))
 			return err
@@ -599,7 +613,7 @@ func (e *Export) rewriteChildren(entry *ExportedImage) error {
 
 			entry = e.ChildOf(newEntry.LayerConfig.Id)
 		} else {
-			log.Debugf("  -  Removing %s. Squashed. (%s)\n", entry.LayerConfig.Id[:12], cmd)
+			log.Debugf("  -  Removing %s. Squashed. (%s)", entry.LayerConfig.Id[:12], cmd)
 			err := os.RemoveAll(entry.Path)
 			if err != nil {
 				return err

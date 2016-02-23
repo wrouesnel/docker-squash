@@ -105,7 +105,6 @@ func main() {
 	}
 
 	if from != "" {
-
 		if from == "root" {
 			start = dockerExport.Root()
 		} else {

@@ -13,7 +13,9 @@ import (
 	"time"
 )
 
-func extractTar(src, dest string) ([]byte, error) {
+// Extracts a tar-file with the correct permissions to expand a docker
+// image layer.
+func ExtractTar(src, dest string) ([]byte, error) {
 	cmd := exec.Command("tar", "--same-owner", "--xattrs", "--overwrite",
 		"--preserve-permissions", "-xf", src, "-C", dest)
 	return cmd.CombinedOutput()

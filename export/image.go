@@ -99,7 +99,7 @@ func (e *ExportedImage) ExtractLayerDir() error {
 		return err
 	}
 
-	out, err := extractTar(e.LayerTarPath, e.LayerDirPath)
+	out, err := ExtractTar(e.LayerTarPath, e.LayerDirPath)
 	if err != nil {
 		println(string(out))
 		return err
