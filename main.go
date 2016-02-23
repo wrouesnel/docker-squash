@@ -75,14 +75,14 @@ func main() {
 		go shutdown(tempdir)
 	}
 
-	export, err := export.LoadExport(input, tempdir)
+	dockerExport, err := export.LoadExport(input, tempdir)
 	if err != nil {
 		log.Fatalln(err)
 	}
 
 	// Export may have multiple branches with the same parent.
 	// We can't handle that currently so abort.
-	for _, v := range export.Repositories {
+	for _, v := range dockerExport.Repositories {
 		commits := map[string]string{}
 		for tag, commit := range *v {
 			commits[commit] = tag
@@ -94,22 +94,22 @@ func main() {
 
 	}
 
-	start := export.FirstSquash()
+	start := dockerExport.FirstSquash()
 	// Can't find a previously squashed layer, use first FROM
 	if start == nil {
-		start = export.FirstFrom()
+		start = dockerExport.FirstFrom()
 	}
 	// Can't find a FROM, default to root
 	if start == nil {
-		start = export.Root()
+		start = dockerExport.Root()
 	}
 
 	if from != "" {
 
 		if from == "root" {
-			start = export.Root()
+			start = dockerExport.Root()
 		} else {
-			start, err = export.GetById(from)
+			start, err = dockerExport.GetById(from)
 			if err != nil {
 				log.Fatalln(err)
 			}
@@ -122,14 +122,14 @@ func main() {
 	}
 
 	// extract each "layer.tar" to "layer" dir
-	err = export.ExtractLayers()
+	err = dockerExport.ExtractLayers()
 	if err != nil {
 		log.Fatalln(err)
 		return
 	}
 
 	// insert a new layer after our squash point
-	newEntry, err := export.InsertLayer(start.LayerConfig.Id)
+	newEntry, err := dockerExport.InsertLayer(start.LayerConfig.Id)
 	if err != nil {
 		log.Fatalln(err)
 		return
@@ -159,7 +159,7 @@ func main() {
 	//}
 
 	// squash all later layers into our new layer
-	err = export.SquashLayers(newEntry, newEntry)
+	err = dockerExport.SquashLayers(newEntry, newEntry)
 	if err != nil {
 		log.Fatalln(err)
 		return
@@ -174,7 +174,7 @@ func main() {
 
 	log.Debugf("Removing extracted layers\n")
 	// remove our expanded "layer" dirs
-	err = export.RemoveExtractedLayers()
+	err = dockerExport.RemoveExtractedLayers()
 	if err != nil {
 		log.Fatalln(err)
 	}
@@ -188,13 +188,13 @@ func main() {
 			tagPart = parts[1]
 		}
 		tagInfo := export.TagInfo{}
-		layer := export.LastChild()
+		layer := dockerExport.LastChild()
 
 		tagInfo[tagPart] = layer.LayerConfig.Id
-		export.Repositories[repoPart] = &tagInfo
+		dockerExport.Repositories[repoPart] = &tagInfo
 
 		log.Debugf("Tagging %s as %s:%s\n", layer.LayerConfig.Id[0:12], repoPart, tagPart)
-		err := export.WriteRepositoriesJson()
+		err := dockerExport.WriteRepositoriesJson()
 		if err != nil {
 			log.Fatalln(err)
 		}
@@ -212,14 +212,14 @@ func main() {
 		log.Debugf("Tarring new image to STDOUT\n")
 	}
 	// bundle up the new image
-	err = export.TarLayers(ow)
+	err = dockerExport.TarLayers(ow)
 	if err != nil {
 		log.Fatalln(err)
 	}
 
 	log.Debugln("Done. New image created.")
 	// print our new history
-	export.PrintHistory()
+	dockerExport.PrintHistory()
 
 	signals <- os.Interrupt
 	wg.Wait()
