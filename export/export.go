@@ -246,10 +246,10 @@ func (e *Export) Extract(r io.Reader) error {
 }
 
 func (e *Export) ExtractLayers() error {
-	log.Debugln("Extracting layers...")
+	log.Infoln("Extracting layers...")
 
 	for _, entry := range e.Entries {
-		log.Debugf("  -  %s", entry.LayerTarPath)
+		log.Debugf("Extracting layer: %s", entry.LayerTarPath)
 		err := entry.ExtractLayerDir()
 		if err != nil {
 			return err
