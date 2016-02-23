@@ -10,7 +10,7 @@ import (
 	"sync"
 	"syscall"
 
-	"github.com/jwilder/docker-squash/export"
+	"github.com/wrouesnel/docker-squash/export"
 	"github.com/wrouesnel/go.log"
 )
 
