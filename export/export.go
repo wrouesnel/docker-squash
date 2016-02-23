@@ -190,7 +190,7 @@ func LoadExport(image, location string) (*Export, error) {
 
 	log.Debugf("Loaded image w/ %s layers", strconv.FormatInt(int64(len(export.Entries)), 10))
 	for repo, tags := range export.Repositories {
-		log.Debugf("  -  %s (%s tags)", repo, strconv.FormatInt(int64(len(*tags)), 10))
+		log.Debugf("%s (%s tags)", repo, strconv.FormatInt(int64(len(*tags)), 10))
 	}
 	return export, err
 }
@@ -433,7 +433,7 @@ func (e *Export) ReplaceLayer(oldId string) (*ExportedImage, error) {
 		cmd = cmd[:47] + "..."
 	}
 
-	log.Debugf("  -  Replacing %s w/ new layer %s (%s)", oldId[:12], id[:12], cmd)
+	log.Debugf("Replacing %s w/ new layer %s (%s)", oldId[:12], id[:12], cmd)
 	if child != nil {
 		child.LayerConfig.Parent = id
 		err = child.WriteJson()
@@ -517,14 +517,14 @@ func (e *Export) SquashLayers(to, from *ExportedImage) error {
 			return err
 		}
 
-		log.Debug("  -  Deleting whiteouts for layer " + entry.LayerConfig.Id[:12])
+		log.Debug("Deleting whiteouts for layer " + entry.LayerConfig.Id[:12])
 		err = e.deleteWhiteouts(layerDir)
 		if err != nil {
 			return err
 		}
 	}
 
-	log.Debug("  -  Rewriting child history")
+	log.Debug("Rewriting child history")
 	return e.rewriteChildren(from)
 }
 
@@ -613,7 +613,7 @@ func (e *Export) rewriteChildren(entry *ExportedImage) error {
 
 			entry = e.ChildOf(newEntry.LayerConfig.Id)
 		} else {
-			log.Debugf("  -  Removing %s. Squashed. (%s)", entry.LayerConfig.Id[:12], cmd)
+			log.Debugf("Removing %s. Squashed. (%s)", entry.LayerConfig.Id[:12], cmd)
 			err := os.RemoveAll(entry.Path)
 			if err != nil {
 				return err
