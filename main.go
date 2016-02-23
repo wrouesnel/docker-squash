@@ -9,6 +9,9 @@ import (
 	"strings"
 	"sync"
 	"syscall"
+
+	"github.com/jwilder/docker-squash/export"
+	"github.com/wrouesnel/go.log"
 )
 
 var (
@@ -20,10 +23,10 @@ var (
 func shutdown(tempdir string) {
 	defer wg.Done()
 	<-signals
-	debugf("Removing tempdir %s\n", tempdir)
+	log.Debugf("Removing tempdir %s\n", tempdir)
 	err := os.RemoveAll(tempdir)
 	if err != nil {
-		fatal(err)
+		log.Fatalln(err)
 	}
 
 }
@@ -36,7 +39,6 @@ func main() {
 	flag.StringVar(&tag, "t", "", "Repository name and tag for new image")
 	flag.StringVar(&from, "from", "", "Squash from layer ID (default: first FROM layer)")
 	flag.BoolVar(&keepTemp, "keepTemp", false, "Keep temp dir when done. (Useful for debugging)")
-	flag.BoolVar(&verbose, "verbose", false, "Enable verbose logging")
 	flag.BoolVar(&version, "v", false, "Print version information and quit")
 
 	flag.Usage = func() {
@@ -55,13 +57,13 @@ func main() {
 	var err error
 	tempdir, err = ioutil.TempDir("", "docker-squash")
 	if err != nil {
-		fatal(err)
+		log.Fatalln(err)
 	}
 
 	if tag != "" && strings.Contains(tag, ":") {
 		parts := strings.Split(tag, ":")
 		if parts[0] == "" || parts[1] == "" {
-			fatalf("bad tag format: %s\n", tag)
+			log.Fatalf("bad tag format: %s\n", tag)
 		}
 	}
 
@@ -73,9 +75,9 @@ func main() {
 		go shutdown(tempdir)
 	}
 
-	export, err := LoadExport(input, tempdir)
+	export, err := export.LoadExport(input, tempdir)
 	if err != nil {
-		fatal(err)
+		log.Fatalln(err)
 	}
 
 	// Export may have multiple branches with the same parent.
@@ -86,7 +88,7 @@ func main() {
 			commits[commit] = tag
 		}
 		if len(commits) > 1 {
-			fatal("This image is a full repository export w/ multiple images in it.  " +
+			log.Fatalln("This image is a full repository export w/ multiple images in it.  " +
 				"You need to generate the export from a specific image ID or tag.")
 		}
 
@@ -109,72 +111,72 @@ func main() {
 		} else {
 			start, err = export.GetById(from)
 			if err != nil {
-				fatal(err)
+				log.Fatalln(err)
 			}
 		}
 	}
 
 	if start == nil {
-		fatalf("no layer matching %s\n", from)
+		log.Fatalf("no layer matching %s\n", from)
 		return
 	}
 
 	// extract each "layer.tar" to "layer" dir
 	err = export.ExtractLayers()
 	if err != nil {
-		fatal(err)
+		log.Fatalln(err)
 		return
 	}
 
 	// insert a new layer after our squash point
 	newEntry, err := export.InsertLayer(start.LayerConfig.Id)
 	if err != nil {
-		fatal(err)
+		log.Fatalln(err)
 		return
 	}
 
-	debugf("Inserted new layer %s after %s\n", newEntry.LayerConfig.Id[0:12],
+	log.Debugf("Inserted new layer %s after %s\n", newEntry.LayerConfig.Id[0:12],
 		newEntry.LayerConfig.Parent[0:12])
 
-	if verbose {
-		e := export.Root()
-		for {
-			if e == nil {
-				break
-			}
-			cmd := strings.Join(e.LayerConfig.ContainerConfig().Cmd, " ")
-			if len(cmd) > 60 {
-				cmd = cmd[:60]
-			}
-
-			if e.LayerConfig.Id == newEntry.LayerConfig.Id {
-				debugf("  -> %s %s\n", e.LayerConfig.Id[0:12], cmd)
-			} else {
-				debugf("  -  %s %s\n", e.LayerConfig.Id[0:12], cmd)
-			}
-			e = export.ChildOf(e.LayerConfig.Id)
-		}
-	}
+	//if verbose {
+	//	e := export.Root()
+	//	for {
+	//		if e == nil {
+	//			break
+	//		}
+	//		cmd := strings.Join(e.LayerConfig.ContainerConfig().Cmd, " ")
+	//		if len(cmd) > 60 {
+	//			cmd = cmd[:60]
+	//		}
+	//
+	//		if e.LayerConfig.Id == newEntry.LayerConfig.Id {
+	//			log.Debugf("  -> %s %s\n", e.LayerConfig.Id[0:12], cmd)
+	//		} else {
+	//			log.Debugf("  -  %s %s\n", e.LayerConfig.Id[0:12], cmd)
+	//		}
+	//		e = export.ChildOf(e.LayerConfig.Id)
+	//	}
+	//}
 
 	// squash all later layers into our new layer
 	err = export.SquashLayers(newEntry, newEntry)
 	if err != nil {
-		fatal(err)
+		log.Fatalln(err)
 		return
 	}
 
-	debugf("Tarring up squashed layer %s\n", newEntry.LayerConfig.Id[:12])
+	log.Debugf("Tarring up squashed layer %s\n", newEntry.LayerConfig.Id[:12])
 	// create a layer.tar from our squashed layer
 	err = newEntry.TarLayer()
 	if err != nil {
-		fatal(err)
+		log.Fatalln(err)
 	}
 
-	debugf("Removing extracted layers\n")
+	log.Debugf("Removing extracted layers\n")
 	// remove our expanded "layer" dirs
 	err = export.RemoveExtractedLayers()
 	if err != nil {
-		fatal(err)
+		log.Fatalln(err)
 	}
 
 	if tag != "" {
@@ -185,16 +187,16 @@ func main() {
 			repoPart = parts[0]
 			tagPart = parts[1]
 		}
-		tagInfo := TagInfo{}
+		tagInfo := export.TagInfo{}
 		layer := export.LastChild()
 
 		tagInfo[tagPart] = layer.LayerConfig.Id
 		export.Repositories[repoPart] = &tagInfo
 
-		debugf("Tagging %s as %s:%s\n", layer.LayerConfig.Id[0:12], repoPart, tagPart)
+		log.Debugf("Tagging %s as %s:%s\n", layer.LayerConfig.Id[0:12], repoPart, tagPart)
 		err := export.WriteRepositoriesJson()
 		if err != nil {
-			fatal(err)
+			log.Fatalln(err)
 		}
 	}
 
@@ -203,19 +205,19 @@ func main() {
 		var err error
 		ow, err = os.Create(output)
 		if err != nil {
-			fatal(err)
+			log.Fatalln(err)
 		}
-		debugf("Tarring new image to %s\n", output)
+		log.Debugf("Tarring new image to %s\n", output)
 	} else {
-		debugf("Tarring new image to STDOUT\n")
+		log.Debugf("Tarring new image to STDOUT\n")
 	}
 	// bundle up the new image
 	err = export.TarLayers(ow)
 	if err != nil {
-		fatal(err)
+		log.Fatalln(err)
 	}
 
-	debug("Done. New image created.")
+	log.Debugln("Done. New image created.")
 	// print our new history
 	export.PrintHistory()
 
