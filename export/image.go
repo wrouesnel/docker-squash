@@ -80,7 +80,12 @@ func (e *ExportedImage) TarLayer() error {
 	}
 	defer os.Chdir(cwd)
 
-	cmd := exec.Command("sudo", "/bin/sh", "-c", "tar cvf ../layer.tar ./")
+	var cmd *exec.Cmd
+	if os.Geteuid() != 0 {
+		cmd = exec.Command("sudo", "/bin/sh", "-c", "tar cvf ../layer.tar ./")
+	} else {
+		cmd = exec.Command("/bin/sh", "-c", "tar cvf ../layer.tar ./")
+	}
 	out, err := cmd.CombinedOutput()
 	if err != nil {
 		println(string(out))
