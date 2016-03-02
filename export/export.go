@@ -292,8 +292,10 @@ func (e *Export) ExtractLayersConcurrently(concurrency int) error {
 			log.Debugf("Extracting layer: %s", entry.LayerTarPath)
 			err := entry.ExtractLayerDir()
 			if err != nil {
+				log.Debugf("Layer extraction error: %s : %s", entry.LayerTarPath, err.Error())
 				cancelled <- err
 			}
+			log.Debugf("Layer extraction completed successfully: %s", entry.LayerTarPath)
 		}(entry, control, cancelled, &wg)
 	}
 
