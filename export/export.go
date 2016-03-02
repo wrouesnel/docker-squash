@@ -568,10 +568,43 @@ func (e *Export) SquashLayers(to, from *ExportedImage) error {
 		}
 
 		log.Debug("Deleting whiteouts for layer " + entry.LayerConfig.Id[:12])
-		err = e.deleteWhiteouts(layerDir)
+		// Doing a filepath walk is *incredibly* slow - whereas iterating the tar archive is surprisingly quick.
+		// Speed this up a lot by just iterating the tar-archive.
+		tarFile, err := os.Open(entry.LayerTarPath)
 		if err != nil {
 			return err
 		}
+		tarReader := tar.NewReader(tarFile)
+		for {
+			hdr, err := tarReader.Next()
+			if err == io.EOF {
+				break
+			}
+			if err != nil {
+				return err
+			}
+
+			// Create the full name
+			fullPath := path.Join(layerDir, hdr.Name)
+			name := path.Base(hdr.Name)
+			parent := path.Join(layerDir, filepath.Dir(hdr.Name))
+			if strings.Index(name, ".wh.") == 0 {
+				deletedFile := path.Join(parent, name[len(".wh."):len(name)])
+				log.Debugln("Removing deleted file from layer:", deletedFile)
+				if err := os.RemoveAll(deletedFile); err != nil {
+					return err
+				}
+				log.Debugln("Removing whiteout file from layer:", fullPath)
+				if err := os.RemoveAll(fullPath); err != nil {
+					return err
+				}
+			}
+		}
+
+		//err = e.deleteWhiteouts(layerDir)
+		//if err != nil {
+		//	return err
+		//}
 	}
 
 	log.Debug("Rewriting child history")
