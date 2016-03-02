@@ -17,6 +17,8 @@ import (
 
 	"github.com/docker/go-units"
 	"github.com/wrouesnel/go.log"
+	"sync"
+	"runtime"
 )
 
 type TagInfo map[string]string
@@ -256,6 +258,51 @@ func (e *Export) ExtractLayers() error {
 		}
 	}
 	return nil
+}
+
+// ExtractLayers but runs multiple layer extractions simultaneously. Can be helpful
+// when dealing with complex dockerfiles but fast underlying storage. Only the first
+// error is returned.
+// Setting concurrency to 0 or negative implies autodetection.
+func (e *Export) ExtractLayersConcurrently(concurrency int) error {
+	if concurrency <= 0 {
+		concurrency = runtime.NumCPU()
+	}
+	log.Infof("Extracting layers with %v processes...", concurrency)
+
+	// Control channel limits concurrent processes
+	control := make(chan interface{}, concurrency)
+	// Cancelled receives errors and triggers an abort
+	cancelled := make(chan error, concurrency)
+	var wg sync.WaitGroup
+	var err error
+
+	Loop: for _, entry := range e.Entries {
+		select {
+		case err = <- cancelled:
+			log.Errorln("Error during extraction:", err)
+			break Loop
+		case control <- nil:
+			wg.Add(1)
+		}
+		go func(entry *ExportedImage, control chan interface{},
+		cancelled chan error, wg *sync.WaitGroup) {
+			defer func() { <- control }()
+			defer wg.Done()
+			log.Debugf("Extracting layer: %s", entry.LayerTarPath)
+			err := entry.ExtractLayerDir()
+			if err != nil {
+				cancelled <- err
+			}
+		}(entry, control, cancelled, &wg)
+	}
+
+	close(control)
+	log.Infoln("Waiting for outstanding extractions to finish...")
+	wg.Wait()
+	close(cancelled)
+
+	return err
 }
 
 func (e *Export) firstLayer(pattern string) *ExportedImage {
