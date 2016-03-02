@@ -304,6 +304,7 @@ func (e *Export) ExtractLayersConcurrently(concurrency int) error {
 	wg.Wait()
 	close(cancelled)
 
+	log.Infoln("Finished extracting layers")
 	return err
 }
 
