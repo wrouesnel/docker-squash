@@ -561,6 +561,7 @@ func (e *Export) SquashLayers(to, from *ExportedImage) error {
 			continue
 		}
 
+		log.Debug("Extracting layer to squash dir:", entry.LayerTarPath)
 		out, err := ExtractTar(entry.LayerTarPath, layerDir)
 		if err != nil {
 			println(string(out))
