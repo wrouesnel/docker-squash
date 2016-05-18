@@ -27,6 +27,10 @@ type Export struct {
 	Entries      map[string]*ExportedImage
 	Repositories map[string]*TagInfo
 	Path         string
+	ManifestJson string
+	Manifest	 *Manifest
+	ConfigJson	 string
+	ImageConfig	 *ImageConfig
 }
 
 type Port string
@@ -43,6 +47,36 @@ func (p Port) Proto() string {
 		return "tcp"
 	}
 	return parts[1]
+}
+
+type Manifest struct {
+	Config	string		`json:"Config"`
+	RepoTags []string	`json:"RepoTags"`
+	LayerPaths []string	`json:"Layers"`
+}
+
+type ImageHistory struct {
+	Created time.Time `json:"created,omitempty"`
+	Author string	`json:"author,omitempty"`
+	CreatedBy string `json:"created_by"`
+	EmptyLayer bool `json:"empty_layer,omitempty"`
+}
+
+type ImageConfig struct {
+	Architecture string	`json:"architecture"`
+	Config	*Config	`json:"config"`
+	ContainerId string	`json:"container"`
+	ContainerConfig *ContainerConfig	`json:"container_config"`
+	Created time.Time	`json:"created"`
+	DockerVersion string	`json:"docker_version"`
+	History []ImageHistory	`json:"history"`
+	Os string	`json:"os"`
+	RootFs	*RootFs `json:"rootfs"`
+}
+
+type RootFs struct {
+	FsType string	`json:"layers"`
+	LayerIds []string `json:"diff_ids"`
 }
 
 type ContainerConfig struct {
@@ -164,9 +198,16 @@ func LoadExport(image, location string) (*Export, error) {
 	}
 
 	for _, dir := range dirs {
-
 		if !dir.IsDir() {
 			continue
+		}
+
+		if dir.Name() == "manifest.json" {
+			err = readJsonFile(filepath.Join(export.Path, dir.Name()), &export.Manifest)
+			if err != nil {
+				// We don't need this, but should prompt the user.
+				log.Errorln("Corrupt manifest.json found!", err)
+			}
 		}
 
 		entry := &ExportedImage{
@@ -188,6 +229,16 @@ func LoadExport(image, location string) (*Export, error) {
 	err = readJsonFile(filepath.Join(export.Path, "repositories"), &export.Repositories)
 	if err != nil {
 		return nil, err
+	}
+
+	// Docker have moved on from the individual JSON files, though they are retained for backward
+	// compatibility - but they have no data in them. It's harmless to read them above, but if
+	// we find a manifest.json file we should use that to populate the entry data.
+	if export.Manifest != nil {
+		err = readJsonFile(filepath.Join(export.Path, export.Manifest.Config), &export.ImageConfig)
+		if err != nil {
+			log.Errorln("Error reading modern container config:", err)
+		}
 	}
 
 	log.Debugf("Loaded image w/ %s layers", strconv.FormatInt(int64(len(export.Entries)), 10))
