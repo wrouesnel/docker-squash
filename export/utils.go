@@ -16,6 +16,15 @@ import (
 // Extracts a tar-file with the correct permissions to expand a docker
 // image layer.
 func ExtractTar(src, dest string) ([]byte, error) {
+	// Docker likes to produce 0-length tar files in save files. These will
+	// *fail* to extract with tar, but are valid (i.e. an empty directory should
+	// result. Catch that situation here and return success.
+	if st, err := os.Stat(src) ; st.Size() == 0 {
+		return []byte{}, nil
+	} else if err != nil {
+		return []byte{}, err
+	}
+
 	cmd := exec.Command("tar", "--same-owner", "--xattrs", "--overwrite",
 		"--preserve-permissions", "-xf", src, "-C", dest)
 	return cmd.CombinedOutput()
